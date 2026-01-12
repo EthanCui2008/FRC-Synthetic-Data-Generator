@@ -30,7 +30,8 @@ const renderer = new THREE.WebGLRenderer({
 renderer.setSize(CAMERA_WIDTH, CAMERA_HEIGHT);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-document.body.appendChild(renderer.domElement);
+const canvasWrapper = document.getElementById('canvas-wrapper');
+canvasWrapper.appendChild(renderer.domElement);
 
 // --- 2. Lighting (Boosted for PBR Models) ---
 // High intensity Ambient light provides "flat" lighting with no shadows
@@ -63,8 +64,6 @@ const regenBtn = document.getElementById('regen-btn');
 
 const cameraHeightSlider = document.getElementById('camera-height');
 const cameraHeightValue = document.getElementById('camera-height-value');
-const cameraFovSlider = document.getElementById('camera-fov');
-const cameraFovValue = document.getElementById('camera-fov-value');
 const cameraMinXInput = document.getElementById('camera-min-x');
 const cameraMaxXInput = document.getElementById('camera-max-x');
 const cameraMinZInput = document.getElementById('camera-min-z');
@@ -92,14 +91,7 @@ let spawnCount = 12;
 
 cameraHeightSlider.addEventListener('input', (e) => {
     CAMERA_HEIGHT_ABOVE_GROUND = parseFloat(e.target.value);
-    cameraHeightValue.textContent = e.target.value;
-    randomizeScene();
-});
-
-cameraFovSlider.addEventListener('input', (e) => {
-    camera.fov = parseFloat(e.target.value);
-    cameraFovValue.textContent = e.target.value;
-    camera.updateProjectionMatrix();
+    cameraHeightValue.textContent = parseFloat(e.target.value).toFixed(2) + ' m';
     randomizeScene();
 });
 

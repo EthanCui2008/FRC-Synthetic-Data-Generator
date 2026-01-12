@@ -1,27 +1,269 @@
-    <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Synthetic Data Generator</title>
     <style>
-        body { 
-            margin: 0; 
-            overflow: hidden; /* Prevent scrollbars */
-            background-color: #000;
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-        canvas { 
-            display: block; 
+        
+        body {
+            background: linear-gradient(135deg, #1e1e2e 0%, #2a2a3e 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            height: 100vh;
+            display: flex;
+            color: #e0e0e0;
+            overflow: hidden;
         }
+        
+        #ui-container {
+            width: 380px;
+            flex-shrink: 0;
+            padding: 20px;
+            background: rgba(20, 20, 30, 0.95);
+            border-right: 1px solid rgba(100, 200, 255, 0.2);
+            overflow-y: auto;
+            box-shadow: 2px 0 20px rgba(0, 0, 0, 0.5);
+        }
+        
+        #ui-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        #ui-container::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        
+        #ui-container::-webkit-scrollbar-thumb {
+            background: rgba(100, 200, 255, 0.3);
+            border-radius: 3px;
+        }
+        
+        #ui-container::-webkit-scrollbar-thumb:hover {
+            background: rgba(100, 200, 255, 0.5);
+        }
+        
+        #ui-container h4 {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #64c8ff;
+            letter-spacing: 1px;
+        }
+        
+        #ui-container hr {
+            border: none;
+            height: 1px;
+            background: rgba(100, 200, 255, 0.2);
+            margin: 15px 0;
+        }
+        
+        label {
+            display: block;
+            font-size: 11px;
+            font-weight: 500;
+            margin-top: 10px;
+            margin-bottom: 4px;
+            color: #a0a0b0;
+            letter-spacing: 0.5px;
+        }
+        
+        input[type="checkbox"],
+        input[type="range"],
+        input[type="number"],
+        button {
+            font-family: inherit;
+        }
+        
+        input[type="checkbox"] {
+            margin-right: 8px;
+            cursor: pointer;
+            accent-color: #64c8ff;
+        }
+        
+        input[type="range"] {
+            width: 100%;
+            height: 5px;
+            border-radius: 3px;
+            background: rgba(100, 200, 255, 0.2);
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+            margin-top: 5px;
+            margin-bottom: 5px;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #64c8ff;
+            cursor: pointer;
+            box-shadow: 0 0 8px rgba(100, 200, 255, 0.6);
+        }
+        
+        input[type="range"]::-moz-range-thumb {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #64c8ff;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 0 8px rgba(100, 200, 255, 0.6);
+        }
+        
+        input[type="number"] {
+            width: 100%;
+            max-width: 80px;
+            padding: 5px 6px;
+            margin-top: 4px;
+            background: rgba(100, 200, 255, 0.1);
+            border: 1px solid rgba(100, 200, 255, 0.3);
+            border-radius: 4px;
+            color: #e0e0e0;
+            font-size: 12px;
+        }
+        
+        button {
+            padding: 6px 10px;
+            margin-top: 6px;
+            margin-right: 5px;
+            background: rgba(100, 200, 255, 0.2);
+            border: 1px solid rgba(100, 200, 255, 0.4);
+            border-radius: 4px;
+            color: #64c8ff;
+            font-size: 11px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            letter-spacing: 0.5px;
+        }
+        
+        button:hover {
+            background: rgba(100, 200, 255, 0.3);
+            border-color: rgba(100, 200, 255, 0.6);
+            box-shadow: 0 0 10px rgba(100, 200, 255, 0.3);
+        }
+        
+        #download-batch-btn {
+            background: rgba(76, 175, 80, 0.3);
+            border-color: rgba(76, 175, 80, 0.6);
+            color: #4CAF50;
+            display: block;
+            width: 100%;
+            margin-top: 10px;
+            margin-right: 0;
+        }
+        
+        #download-batch-btn:hover {
+            background: rgba(76, 175, 80, 0.4);
+            border-color: rgba(76, 175, 80, 0.8);
+            box-shadow: 0 0 12px rgba(76, 175, 80, 0.4);
+        }
+        
+        #download-batch-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        #batch-progress {
+            font-size: 11px;
+            color: #64c8ff;
+            margin-top: 8px;
+        }
+        
+        .control-row {
+            display: flex;
+            gap: 10px;
+            margin-top: 8px;
+        }
+        
+        .control-row input[type="number"] {
+            flex: 1;
+        }
+        
+        #camera-info {
+            background: rgba(100, 200, 255, 0.08);
+            border: 1px solid rgba(100, 200, 255, 0.2);
+            border-radius: 4px;
+            padding: 10px;
+            margin-top: 12px;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+        }
+        
+        #camera-info div {
+            line-height: 1.5;
+            color: #64c8ff;
+        }
+        
+        #canvas-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        #canvas-wrapper {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        
+        canvas {
+            border: 2px solid rgba(100, 200, 255, 0.3);
+            border-radius: 4px;
+            box-shadow: 0 0 30px rgba(100, 200, 255, 0.1);
+            background: #222;
+            display: block;
+            max-width: 100%;
+            height: auto;
+        }
+        
         #info {
             position: absolute;
-            top: 10px;
-            left: 10px;
-            color: white;
-            font-family: monospace;
-            background: rgba(0, 0, 0, 0.5);
-            padding: 5px;
+            top: 20px;
+            left: 410px;
+            color: #64c8ff;
+            font-family: 'Courier New', monospace;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 10px 15px;
             pointer-events: none;
+            font-size: 12px;
+            border: 1px solid rgba(100, 200, 255, 0.2);
+            border-radius: 4px;
+        }
+        
+        .value-display {
+            display: block;
+            text-align: right;
+            margin-top: 2px;
+            font-size: 12px;
+            color: #64c8ff;
+            font-weight: 500;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+            margin-top: 8px;
+        }
+        
+        .button-group button {
+            flex: 1;
+            min-width: 75px;
+            margin: 0;
         }
     </style>
     
@@ -36,65 +278,76 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
-    <div id="info">Generating Synthetic Data... check downloads.</div>
-
-    <script type="module" src="./main.js"></script>
-    <div id="ui-container" style="position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.7); color: white; padding: 15px; font-family: sans-serif; border-radius: 8px; z-index: 100;">
-        <h4 style="margin: 0 0 10px 0;">Controls</h4>
+    <div id="ui-container">
+        <h4>Synthetic Data Generator</h4>
+        
         <label>
             <input type="checkbox" id="toggle-noise" checked> Enable Noise/BW Shader
         </label>
-        <br><br>
         <button id="regen-btn">Generate New Frame</button>
+        
         <hr>
+        
         <label for="camera-height">Camera Height (m):</label>
         <input type="range" id="camera-height" min="0.2" max="2.0" step="0.01" value="0.3">
-        <span id="camera-height-value">0.3</span>
-        <br><br>
-        <label for="camera-fov">Camera FOV (deg):</label>
-        <input type="range" id="camera-fov" min="30" max="100" step="1" value="55">
-        <span id="camera-fov-value">55</span>
-        <br><br>
+        <span class="value-display" id="camera-height-value">0.30 m</span>
+        
+        <label for="camera-min-x">Camera Bounds X:</label>
+        <div class="control-row">
+            <input type="number" id="camera-min-x" step="0.01" value="-9" placeholder="Min">
+            <input type="number" id="camera-max-x" step="0.01" value="9" placeholder="Max">
+        </div>
+        
+        <label for="camera-min-z">Camera Bounds Z:</label>
+        <div class="control-row">
+            <input type="number" id="camera-min-z" step="0.01" value="-4" placeholder="Min">
+            <input type="number" id="camera-max-z" step="0.01" value="4" placeholder="Max">
+        </div>
+        
+        <hr>
+        
         <label for="camera-vfov">Vertical FOV (deg):</label>
         <input type="range" id="camera-vfov" min="20" max="90" step="1" value="55">
-        <span id="camera-vfov-value">55</span>
-        <br>
+        <span class="value-display" id="camera-vfov-value">55°</span>
+        
         <label for="camera-hfov">Horizontal FOV (deg):</label>
         <input type="range" id="camera-hfov" min="30" max="120" step="1" value="80">
-        <span id="camera-hfov-value">80</span>
-        <br><br>
+        <span class="value-display" id="camera-hfov-value">80°</span>
+        
         <label>Resolution Preset:</label>
-        <button id="res-1920x1200">1920x1200</button>
-        <button id="res-1280x720">1280x720</button>
-        <button id="res-640x480">640x480</button>
-        <br><br>
-        <label for="camera-min-x">Camera Min X:</label>
-        <input type="number" id="camera-min-x" step="0.01" value="-9">
-        <label for="camera-max-x">Max X:</label>
-        <input type="number" id="camera-max-x" step="0.01" value="9">
-        <br>
-        <label for="camera-min-z">Camera Min Z:</label>
-        <input type="number" id="camera-min-z" step="0.01" value="-4">
-        <label for="camera-max-z">Max Z:</label>
-        <input type="number" id="camera-max-z" step="0.01" value="4">
-        <br><br>
-
+        <div class="button-group">
+            <button id="res-1920x1200">1920×1200</button>
+            <button id="res-1280x720">1280×720</button>
+            <button id="res-640x480">640×480</button>
+        </div>
+        
+        <hr>
+        
         <label for="spawn-count">Balls per Frame:</label>
-        <input type="range" id="spawn-count" min="1" max="100" step="1" value="12" style="width: 180px; vertical-align: middle;">
-        <span id="spawn-count-value" style="display: inline-block; min-width: 24px;">12</span>
-        <br><br>
+        <input type="range" id="spawn-count" min="1" max="100" step="1" value="12">
+        <span class="value-display" id="spawn-count-value">12</span>
+        
         <label for="batch-count">Frames to Generate:</label>
-        <input type="number" id="batch-count" min="1" max="1000" value="10" style="width: 60px;">
-        <button id="download-batch-btn" style="margin-left: 10px; padding: 5px 10px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">Download Batch (ZIP)</button>
-        <div id="batch-progress" style="font-size: 12px; color: #ccc; margin-top: 5px;"></div>
-        <br><br>
-        <div id="camera-info" style="font-family: monospace; font-size: 11px;">
-            <div>X: <span id="camera-x">0</span></div>
-            <div>Y: <span id="camera-y">0</span></div>
-            <div>Z: <span id="camera-z">0</span></div>
-            <div>Pitch: <span id="camera-pitch-info">0</span>°</div>
-            <div>Yaw: <span id="camera-yaw-info">0</span>°</div>
+        <input type="number" id="batch-count" min="1" max="1000" value="10">
+        <button id="download-batch-btn">Download Batch (ZIP)</button>
+        <div id="batch-progress"></div>
+        
+        <hr>
+        
+        <label>Camera State</label>
+        <div id="camera-info">
+            <div>X: <span id="camera-x">0.00</span></div>
+            <div>Y: <span id="camera-y">0.00</span></div>
+            <div>Z: <span id="camera-z">0.00</span></div>
+            <div>Pitch: <span id="camera-pitch-info">0.0</span>°</div>
+            <div>Yaw: <span id="camera-yaw-info">0.0</span>°</div>
         </div>
     </div>
+    
+    <div id="canvas-container">
+        <div id="canvas-wrapper"></div>
+    </div>
+
+    <script type="module" src="./main.js"></script>
 </body>
 </html>
