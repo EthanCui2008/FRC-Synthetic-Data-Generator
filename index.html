@@ -1,1 +1,100 @@
+    <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Synthetic Data Generator</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; /* Prevent scrollbars */
+            background-color: #000;
+        }
+        canvas { 
+            display: block; 
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: monospace;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 5px;
+            pointer-events: none;
+        }
+    </style>
+    
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body>
+    <div id="info">Generating Synthetic Data... check downloads.</div>
 
+    <script type="module" src="./main.js"></script>
+    <div id="ui-container" style="position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.7); color: white; padding: 15px; font-family: sans-serif; border-radius: 8px; z-index: 100;">
+        <h4 style="margin: 0 0 10px 0;">Controls</h4>
+        <label>
+            <input type="checkbox" id="toggle-noise" checked> Enable Noise/BW Shader
+        </label>
+        <br><br>
+        <button id="regen-btn">Generate New Frame</button>
+        <hr>
+        <label for="camera-height">Camera Height (m):</label>
+        <input type="range" id="camera-height" min="0.2" max="2.0" step="0.01" value="0.3">
+        <span id="camera-height-value">0.3</span>
+        <br><br>
+        <label for="camera-fov">Camera FOV (deg):</label>
+        <input type="range" id="camera-fov" min="30" max="100" step="1" value="55">
+        <span id="camera-fov-value">55</span>
+        <br><br>
+        <label for="camera-vfov">Vertical FOV (deg):</label>
+        <input type="range" id="camera-vfov" min="20" max="90" step="1" value="55">
+        <span id="camera-vfov-value">55</span>
+        <br>
+        <label for="camera-hfov">Horizontal FOV (deg):</label>
+        <input type="range" id="camera-hfov" min="30" max="120" step="1" value="80">
+        <span id="camera-hfov-value">80</span>
+        <br><br>
+        <label>Resolution Preset:</label>
+        <button id="res-1920x1200">1920x1200</button>
+        <button id="res-1280x720">1280x720</button>
+        <button id="res-640x480">640x480</button>
+        <br><br>
+        <label for="camera-min-x">Camera Min X:</label>
+        <input type="number" id="camera-min-x" step="0.01" value="-9">
+        <label for="camera-max-x">Max X:</label>
+        <input type="number" id="camera-max-x" step="0.01" value="9">
+        <br>
+        <label for="camera-min-z">Camera Min Z:</label>
+        <input type="number" id="camera-min-z" step="0.01" value="-4">
+        <label for="camera-max-z">Max Z:</label>
+        <input type="number" id="camera-max-z" step="0.01" value="4">
+        <br><br>
+
+        <label for="spawn-count">Balls per Frame:</label>
+        <input type="range" id="spawn-count" min="1" max="100" step="1" value="12" style="width: 180px; vertical-align: middle;">
+        <span id="spawn-count-value" style="display: inline-block; min-width: 24px;">12</span>
+        <br><br>
+        <label for="batch-count">Frames to Generate:</label>
+        <input type="number" id="batch-count" min="1" max="1000" value="10" style="width: 60px;">
+        <button id="download-batch-btn" style="margin-left: 10px; padding: 5px 10px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">Download Batch (ZIP)</button>
+        <div id="batch-progress" style="font-size: 12px; color: #ccc; margin-top: 5px;"></div>
+        <br><br>
+        <div id="camera-info" style="font-family: monospace; font-size: 11px;">
+            <div>X: <span id="camera-x">0</span></div>
+            <div>Y: <span id="camera-y">0</span></div>
+            <div>Z: <span id="camera-z">0</span></div>
+            <div>Pitch: <span id="camera-pitch-info">0</span>°</div>
+            <div>Yaw: <span id="camera-yaw-info">0</span>°</div>
+        </div>
+    </div>
+</body>
+</html>
