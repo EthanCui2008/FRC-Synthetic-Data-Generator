@@ -3,3 +3,6 @@
 *.llb
 */idea
 
+.idea/inspectionProfiles/Project_Default.xml
+*.iml
+*.xml
