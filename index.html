@@ -177,6 +177,35 @@
             color: #64c8ff;
             margin-top: 8px;
         }
+
+        .progress-container {
+            width: 100%;
+            height: 8px;
+            background: rgba(100, 200, 255, 0.1);
+            border-radius: 4px;
+            margin-top: 8px;
+            overflow: hidden;
+            display: none;
+        }
+
+        .progress-container.active {
+            display: block;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #8BC34A);
+            border-radius: 4px;
+            width: 0%;
+            transition: width 0.2s ease;
+        }
+
+        .progress-text {
+            font-size: 10px;
+            color: #a0a0b0;
+            margin-top: 4px;
+            text-align: center;
+        }
         
         .control-row {
             display: flex;
@@ -327,10 +356,18 @@
         <input type="range" id="spawn-count" min="1" max="100" step="1" value="12">
         <span class="value-display" id="spawn-count-value">12</span>
         
-        <label for="batch-count">Frames to Generate:</label>
-        <input type="number" id="batch-count" min="1" max="1000" value="10">
-        <button id="download-batch-btn">Download Batch (ZIP)</button>
-        <div id="batch-progress"></div>
+        <label for="batch-count">Total Images to Generate:</label>
+        <input type="number" id="batch-count" min="1" max="1000" value="100">
+
+        <label for="train-split">Train/Valid Split:</label>
+        <input type="range" id="train-split" min="0" max="100" step="5" value="80">
+        <span class="value-display" id="train-split-value">80% train / 20% valid</span>
+
+        <button id="download-batch-btn">Download YOLO Dataset (ZIP)</button>
+        <div class="progress-container" id="progress-container">
+            <div class="progress-bar" id="progress-bar"></div>
+        </div>
+        <div class="progress-text" id="batch-progress"></div>
         
         <hr>
         

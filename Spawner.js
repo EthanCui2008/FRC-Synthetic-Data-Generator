@@ -72,19 +72,66 @@ export class Spawner {
     }
 
     /**
-     * Spawn spheres randomly on a given y plane, allowing clipping
+     * Get the effective radius of a ball (accounting for scale)
+     */
+    getBallRadius(ball) {
+        const baseRadius = ball.geometry.parameters.radius;
+        return baseRadius * ball.scale.x;
+    }
+
+    /**
+     * Check if a position would cause collision with existing balls
+     */
+    wouldCollide(x, z, radius, existingBalls) {
+        for (const ball of existingBalls) {
+            const otherRadius = this.getBallRadius(ball);
+            const dx = x - ball.position.x;
+            const dz = z - ball.position.z;
+            const distance = Math.sqrt(dx * dx + dz * dz);
+            const minDistance = radius + otherRadius;
+            if (distance < minDistance) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Spawn spheres randomly on a given y plane, preventing ball-to-ball clipping
      */
     spawnOnPlane(count, minX, maxX, minZ, maxZ, y) {
         this.spawnedInstances.forEach(p => this.scene.remove(p));
         this.spawnedInstances = [];
+
+        const maxAttempts = 100; // Max attempts per ball to find non-colliding position
+
         for (let i = 0; i < count; i++) {
             const template = this.pieces[Math.floor(Math.random() * this.pieces.length)];
             const clone = template.clone();
-            const x = THREE.MathUtils.lerp(minX, maxX, Math.random());
-            const z = THREE.MathUtils.lerp(minZ, maxZ, Math.random());
-            // All balls same size
             clone.scale.set(2.0, 2.0, 2.0);
-            clone.position.set(x, y, z);
+
+            const effectiveRadius = this.getBallRadius(clone);
+            let placed = false;
+
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                const x = THREE.MathUtils.lerp(minX, maxX, Math.random());
+                const z = THREE.MathUtils.lerp(minZ, maxZ, Math.random());
+
+                if (!this.wouldCollide(x, z, effectiveRadius, this.spawnedInstances)) {
+                    clone.position.set(x, y, z);
+                    placed = true;
+                    break;
+                }
+            }
+
+            // If we couldn't find a non-colliding position after max attempts,
+            // skip this ball to avoid infinite loops with too many balls
+            if (!placed) {
+                clone.geometry.dispose();
+                clone.material.dispose();
+                continue;
+            }
+
             this.scene.add(clone);
             this.spawnedInstances.push(clone);
         }

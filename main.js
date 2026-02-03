@@ -82,6 +82,10 @@ const cameraHFovValue = document.getElementById('camera-hfov-value');
 const batchCountInput = document.getElementById('batch-count');
 const downloadBatchBtn = document.getElementById('download-batch-btn');
 const batchProgress = document.getElementById('batch-progress');
+const progressContainer = document.getElementById('progress-container');
+const progressBar = document.getElementById('progress-bar');
+const trainSplitSlider = document.getElementById('train-split');
+const trainSplitValue = document.getElementById('train-split-value');
 
 // Camera bounds and angle state
 let cameraMinX = -9, cameraMaxX = 9, cameraMinZ = -4, cameraMaxZ = 4;
@@ -142,6 +146,14 @@ document.getElementById('res-640x480').addEventListener('click', () => setResolu
 
 downloadBatchBtn.addEventListener('click', downloadBatch);
 
+if (trainSplitSlider && trainSplitValue) {
+    trainSplitSlider.addEventListener('input', (e) => {
+        const trainPct = parseInt(e.target.value);
+        const validPct = 100 - trainPct;
+        trainSplitValue.textContent = `${trainPct}% train / ${validPct}% valid`;
+    });
+}
+
 noiseToggle.addEventListener('change', (e) => {
     noisePass.enabled = e.target.checked;
 });
@@ -164,45 +176,65 @@ async function downloadBatch() {
         alert('Please enter a count between 1 and 1000');
         return;
     }
-    
+
+    // Calculate train/valid split from slider
+    const trainPct = parseInt(trainSplitSlider.value) / 100;
+    const trainCount = Math.floor(count * trainPct);
+    const validCount = count - trainCount;
+
     downloadBatchBtn.disabled = true;
-    batchProgress.textContent = 'Generating...';
-    
-    const zip = new JSZip();
-    const imagesFolder = zip.folder('images');
-    const labelsFolder = zip.folder('labels');
-    
-    for (let i = 0; i < count; i++) {
+    progressContainer.classList.add('active');
+    progressBar.style.width = '0%';
+    batchProgress.textContent = 'Generating YOLO dataset...';
+
+    // Frame generator function
+    const generateFrame = async () => {
         randomizeScene();
-        // Allow render to complete
         await new Promise(r => setTimeout(r, 50));
         composer.render();
-        
-        // Export image
-        const imgData = renderer.domElement.toDataURL('image/png').split(',')[1];
-        imagesFolder.file(`image_${i}.png`, imgData, {base64: true});
-        
-        // Export labels
-        const labels = spawner.spawnedInstances
-            .map(obj => exporter.toScreenPosition(obj))
-            .filter(res => res !== null);
-        labelsFolder.file(`data_${i}.json`, JSON.stringify(labels));
-        
-        batchProgress.textContent = `Generated ${i + 1}/${count}`;
-    }
-    
-    // Generate zip and download
-    zip.generateAsync({type: 'blob'}).then((blob) => {
+
+        const imageData = renderer.domElement.toDataURL('image/png').split(',')[1];
+        const labels = exporter.generateLabels(spawner.spawnedInstances);
+
+        return { imageData, labels };
+    };
+
+    // Progress callback
+    const onProgress = (current, total, split) => {
+        const percent = (current / total) * 100;
+        progressBar.style.width = `${percent}%`;
+        batchProgress.textContent = `Generating ${split}: ${current}/${total} (${percent.toFixed(0)}%)`;
+    };
+
+    // Generate YOLO dataset
+    const zip = await exporter.generateYOLODataset(
+        generateFrame,
+        trainCount,
+        validCount,
+        0, // No test set
+        onProgress
+    );
+
+    // Download zip
+    batchProgress.textContent = 'Creating ZIP file...';
+    progressBar.style.width = '100%';
+
+    zip.generateAsync({ type: 'blob' }).then((blob) => {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `synthetic_data_${new Date().getTime()}.zip`;
+        a.download = `yolo_dataset_${new Date().getTime()}.zip`;
         a.click();
         URL.revokeObjectURL(url);
-        
+
         downloadBatchBtn.disabled = false;
-        batchProgress.textContent = 'Complete!';
-        setTimeout(() => { batchProgress.textContent = ''; }, 3000);
+        batchProgress.textContent = `Complete! Train: ${trainCount}, Valid: ${validCount}`;
+
+        setTimeout(() => {
+            batchProgress.textContent = '';
+            progressContainer.classList.remove('active');
+            progressBar.style.width = '0%';
+        }, 5000);
     });
 }
 
