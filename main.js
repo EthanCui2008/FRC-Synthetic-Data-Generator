@@ -84,8 +84,6 @@ const downloadBatchBtn = document.getElementById('download-batch-btn');
 const batchProgress = document.getElementById('batch-progress');
 const progressContainer = document.getElementById('progress-container');
 const progressBar = document.getElementById('progress-bar');
-const trainSplitSlider = document.getElementById('train-split');
-const trainSplitValue = document.getElementById('train-split-value');
 
 // Camera bounds and angle state
 let cameraMinX = -9, cameraMaxX = 9, cameraMinZ = -4, cameraMaxZ = 4;
@@ -146,14 +144,6 @@ document.getElementById('res-640x480').addEventListener('click', () => setResolu
 
 downloadBatchBtn.addEventListener('click', downloadBatch);
 
-if (trainSplitSlider && trainSplitValue) {
-    trainSplitSlider.addEventListener('input', (e) => {
-        const trainPct = parseInt(e.target.value);
-        const validPct = 100 - trainPct;
-        trainSplitValue.textContent = `${trainPct}% train / ${validPct}% valid`;
-    });
-}
-
 noiseToggle.addEventListener('change', (e) => {
     noisePass.enabled = e.target.checked;
 });
@@ -177,17 +167,11 @@ async function downloadBatch() {
         return;
     }
 
-    // Calculate train/valid split from slider
-    const trainPct = parseInt(trainSplitSlider.value) / 100;
-    const trainCount = Math.floor(count * trainPct);
-    const validCount = count - trainCount;
-
     downloadBatchBtn.disabled = true;
     progressContainer.classList.add('active');
     progressBar.style.width = '0%';
     batchProgress.textContent = 'Generating YOLO dataset...';
 
-    // Frame generator function
     const generateFrame = async () => {
         randomizeScene();
         await new Promise(r => setTimeout(r, 50));
@@ -199,23 +183,14 @@ async function downloadBatch() {
         return { imageData, labels };
     };
 
-    // Progress callback
-    const onProgress = (current, total, split) => {
+    const onProgress = (current, total) => {
         const percent = (current / total) * 100;
         progressBar.style.width = `${percent}%`;
-        batchProgress.textContent = `Generating ${split}: ${current}/${total} (${percent.toFixed(0)}%)`;
+        batchProgress.textContent = `Generating: ${current}/${total} (${percent.toFixed(0)}%)`;
     };
 
-    // Generate YOLO dataset
-    const zip = await exporter.generateYOLODataset(
-        generateFrame,
-        trainCount,
-        validCount,
-        0, // No test set
-        onProgress
-    );
+    const zip = await exporter.generateYOLODataset(generateFrame, count, onProgress);
 
-    // Download zip
     batchProgress.textContent = 'Creating ZIP file...';
     progressBar.style.width = '100%';
 
@@ -228,7 +203,7 @@ async function downloadBatch() {
         URL.revokeObjectURL(url);
 
         downloadBatchBtn.disabled = false;
-        batchProgress.textContent = `Complete! Train: ${trainCount}, Valid: ${validCount}`;
+        batchProgress.textContent = `Complete! ${count} images generated.`;
 
         setTimeout(() => {
             batchProgress.textContent = '';
@@ -320,15 +295,6 @@ function animate() {
     
     composer.render();
 }
-
-// Handle Window Resize
-
-window.addEventListener('resize', () => {
-    camera.aspect = CAMERA_ASPECT;
-    camera.updateProjectionMatrix();
-    renderer.setSize(CAMERA_WIDTH, CAMERA_HEIGHT);
-    composer.setSize(CAMERA_WIDTH, CAMERA_HEIGHT);
-});
 
 // Launch
 init();

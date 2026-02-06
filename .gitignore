@@ -2,7 +2,7 @@
 *.lvlibp
 *.llb
 */idea
-
+*/claude
 .idea
 *.iml
 *.xml

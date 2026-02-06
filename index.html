@@ -239,24 +239,19 @@
             justify-content: center;
             background: #000;
             position: relative;
-            overflow: hidden;
+            overflow: auto;
         }
-        
+
         #canvas-wrapper {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            position: relative;
+            display: block;
         }
-        
+
         canvas {
             border: 2px solid rgba(100, 200, 255, 0.3);
             border-radius: 4px;
             box-shadow: 0 0 30px rgba(100, 200, 255, 0.1);
             background: #222;
             display: block;
-            max-width: 100%;
-            height: auto;
         }
         
         #info {
@@ -356,12 +351,8 @@
         <input type="range" id="spawn-count" min="1" max="100" step="1" value="12">
         <span class="value-display" id="spawn-count-value">12</span>
         
-        <label for="batch-count">Total Images to Generate:</label>
+        <label for="batch-count">Images to Generate:</label>
         <input type="number" id="batch-count" min="1" max="1000" value="100">
-
-        <label for="train-split">Train/Valid Split:</label>
-        <input type="range" id="train-split" min="0" max="100" step="5" value="80">
-        <span class="value-display" id="train-split-value">80% train / 20% valid</span>
 
         <button id="download-batch-btn">Download YOLO Dataset (ZIP)</button>
         <div class="progress-container" id="progress-container">
