@@ -1,8 +1,9 @@
 export const NoiseShader = {
     uniforms: {
         "tDiffuse": { value: null },
-        "amount": { value: 0.5 }, // Noise strength
-        "time": { value: 0.0 }    // Seed for noise
+        "noiseAmount": { value: 0.15 }, // Noise strength
+        "grayscale": { value: 1.0 },    // 0 = color, 1 = grayscale
+        "time": { value: 0.0 }          // Seed for noise
     },
     vertexShader: `
         varying vec2 vUv;
@@ -13,7 +14,8 @@ export const NoiseShader = {
     `,
     fragmentShader: `
         uniform sampler2D tDiffuse;
-        uniform float amount;
+        uniform float noiseAmount;
+        uniform float grayscale;
         uniform float time;
         varying vec2 vUv;
 
@@ -24,13 +26,16 @@ export const NoiseShader = {
 
         void main() {
             vec4 color = texture2D( tDiffuse, vUv );
-            
-            // 1. Convert to Grayscale (Luma method)
+
+            // Convert to grayscale (Luma method)
             float gray = dot(color.rgb, vec3(0.299, 0.587, 0.114));
-            
-            // 2. Add Noise
-            float noise = random(vUv) * amount;
-            vec3 finalColor = vec3(gray + noise);
+
+            // Mix between color and grayscale based on uniform
+            vec3 baseColor = mix(color.rgb, vec3(gray), grayscale);
+
+            // Add noise
+            float noise = (random(vUv) - 0.5) * noiseAmount;
+            vec3 finalColor = baseColor + noise;
 
             gl_FragColor = vec4( finalColor, 1.0 );
         }

@@ -1,0 +1,391 @@
+:root {
+  --color-bg-primary: #f4f4f4;
+  --color-ink-primary: #222222;
+  --paper: var(--color-bg-primary);
+  --panel: #ffffff;
+  --ink: var(--color-ink-primary);
+  --muted: #2a3a42;
+  --accent: #2f4246;
+  --accent-2: #4d5c62;
+  --line: rgba(18, 24, 33, 0.12);
+  --shadow: none;
+  --border-color: #222222;
+  --shadow-color: #b0b0b0;
+  --btn-shadow: 3px 3px 0 0 var(--shadow-color);
+  --btn-shadow-hover: 2px 2px 0 0 var(--shadow-color);
+  --btn-shadow-active: 0 0 0 0 var(--shadow-color);
+  --btn-shadow-small: 2px 2px 0 0 var(--shadow-color);
+  --btn-shadow-small-hover: 1px 1px 0 0 var(--shadow-color);
+  --btn-shadow-small-active: 0 0 0 0 var(--shadow-color);
+  --button-saturation: 1.35;
+  --color-generate: #6bc08d;
+  --color-export: #e2775f;
+  --color-camera: #619cdf;
+  --color-field: #D98763;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: var(--ink);
+  background: var(--paper);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.15' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.32'/%3E%3C/svg%3E");
+  mix-blend-mode: multiply;
+  opacity: 1;
+  z-index: 1000;
+}
+
+/* UI Container (Left Panel) */
+#ui-container {
+  width: 380px;
+  flex-shrink: 0;
+  padding: 1.15rem 1rem 1.4rem;
+  background: #fbfbfb;
+  border-right: 1px solid var(--border-color);
+  box-shadow: 3px 0 0 0 var(--shadow-color);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+#ui-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+#ui-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#ui-container::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 3px;
+}
+
+#ui-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+/* Headings */
+#ui-container h4 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0.45rem 0 0.3rem;
+  color: var(--ink);
+  letter-spacing: 0.02em;
+}
+
+#ui-container hr {
+  border: none;
+  height: 1px;
+  background: var(--border-color);
+  margin: 0.85rem 0;
+}
+
+/* Labels */
+label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin-top: 0.8rem;
+  margin-bottom: 0.3rem;
+  color: var(--accent-2);
+}
+
+/* Checkboxes */
+input[type="checkbox"] {
+  margin-right: 8px;
+  cursor: pointer;
+  accent-color: var(--color-generate);
+  width: 16px;
+  height: 16px;
+}
+
+/* Range Sliders */
+input[type="range"] {
+  width: 100%;
+  height: 8px;
+  border-radius: 0;
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--btn-shadow-small);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  margin-top: 0.3rem;
+  margin-bottom: 0.3rem;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 0;
+  background: var(--color-generate);
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  box-shadow: 2px 2px 0 0 var(--shadow-color);
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  box-shadow: 1px 1px 0 0 var(--shadow-color);
+  transform: translate(1px, 1px);
+}
+
+input[type="range"]::-webkit-slider-thumb:active {
+  box-shadow: 0 0 0 0 var(--shadow-color);
+  transform: translate(2px, 2px);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 0;
+  background: var(--color-generate);
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  box-shadow: 2px 2px 0 0 var(--shadow-color);
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+/* Number Inputs */
+input[type="number"] {
+  width: 100%;
+  max-width: 80px;
+  padding: 0.4rem 0.5rem;
+  margin-top: 0.3rem;
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  border-radius: 0;
+  color: var(--ink);
+  font-size: 0.85rem;
+  font-weight: 600;
+  box-shadow: var(--btn-shadow-small);
+}
+
+/* Buttons */
+button {
+  padding: 0.5rem 0.85rem;
+  margin-top: 0.5rem;
+  margin-right: 0;
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  border-radius: 0;
+  color: #000000;
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-family: inherit;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  box-shadow: var(--btn-shadow);
+  filter: saturate(var(--button-saturation));
+  transition: box-shadow 0.15s ease, transform 0.15s ease, background-color 0.15s ease, filter 0.15s ease;
+}
+
+button:hover {
+  box-shadow: var(--btn-shadow-hover);
+  transform: translate(1px, 1px);
+}
+
+button:active {
+  box-shadow: var(--btn-shadow-active);
+  transform: translate(3px, 3px);
+  filter: saturate(var(--button-saturation)) brightness(0.85);
+}
+
+#regen-btn {
+  background: var(--color-generate);
+  width: 100%;
+}
+
+#download-batch-btn {
+  background: var(--color-export);
+  width: 100%;
+  margin-top: 0.8rem;
+}
+
+#download-batch-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: saturate(1);
+}
+
+/* Button Group */
+.button-group {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+
+.button-group button {
+  flex: 1;
+  min-width: 75px;
+  margin: 0;
+  background: var(--color-camera);
+}
+
+/* Progress Bar */
+.progress-container {
+  width: 100%;
+  height: 12px;
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  border-radius: 0;
+  margin-top: 0.6rem;
+  overflow: hidden;
+  display: none;
+  box-shadow: inset 2px 2px 0 0 rgba(0, 0, 0, 0.1);
+}
+
+.progress-container.active {
+  display: block;
+}
+
+.progress-bar {
+  height: 100%;
+  background: var(--color-generate);
+  border-right: 1px solid var(--border-color);
+  width: 0%;
+  transition: width 0.2s ease;
+}
+
+.progress-text {
+  font-size: 0.72rem;
+  color: var(--accent-2);
+  margin-top: 0.4rem;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+}
+
+/* Control Row */
+.control-row {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+}
+
+.control-row input[type="number"] {
+  flex: 1;
+  max-width: none;
+}
+
+/* Value Display */
+.value-display {
+  display: block;
+  text-align: right;
+  margin-top: 0.2rem;
+  font-size: 0.85rem;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* Camera Info Card */
+#camera-info {
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  border-radius: 0;
+  padding: 0.8rem 1rem;
+  margin-top: 0.8rem;
+  font-family: 'Courier New', monospace;
+  font-size: 0.85rem;
+  box-shadow: var(--btn-shadow);
+}
+
+#camera-info div {
+  line-height: 1.6;
+  color: var(--ink);
+  display: flex;
+  justify-content: space-between;
+}
+
+#camera-info span {
+  font-weight: 700;
+  color: var(--color-camera);
+}
+
+/* Canvas Container */
+#canvas-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000000;
+  position: relative;
+  overflow: auto;
+}
+
+#canvas-wrapper {
+  display: block;
+}
+
+canvas {
+  border: 3px solid var(--border-color);
+  border-radius: 0;
+  box-shadow: 6px 6px 0 0 var(--shadow-color);
+  background: #222;
+  display: block;
+}
+
+/* Animations */
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Accessibility */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Responsive */
+@media (max-width: 960px) {
+  body {
+    flex-direction: column;
+  }
+
+  #ui-container {
+    width: 100%;
+    height: auto;
+    max-height: 50vh;
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
+    box-shadow: 0 3px 0 0 var(--shadow-color);
+  }
+
+  #canvas-container {
+    flex: 1;
+  }
+}

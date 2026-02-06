@@ -29,19 +29,31 @@ const renderer = new THREE.WebGLRenderer({
 });
 renderer.setSize(CAMERA_WIDTH, CAMERA_HEIGHT);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.BasicShadowMap; // Sharp shadows, computationally cheaper
 const canvasWrapper = document.getElementById('canvas-wrapper');
 canvasWrapper.appendChild(renderer.domElement);
 
-// --- 2. Lighting (Boosted for PBR Models) ---
-// High intensity Ambient light provides "flat" lighting with no shadows
-const ambientLight = new THREE.AmbientLight(0xffffff, 1.5); 
+// --- 2. Lighting (Optimized for Contrast and Shadows) ---
+// Low ambient light to preserve shadow contrast
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.25);
 scene.add(ambientLight);
 
-// Directional light placed directly above (0, 100, 0) pointing straight down
-const overheadLight = new THREE.DirectionalLight(0xffffff, 1.0);
-overheadLight.position.set(0, 100, 0); 
+// Strong directional light placed directly above (0, 100, 0) pointing straight down
+const overheadLight = new THREE.DirectionalLight(0xffffff, 2.5);
+overheadLight.position.set(0, 100, 0);
 overheadLight.castShadow = true;
+
+// Shadow configuration for sharp, high-quality shadows
+overheadLight.shadow.mapSize.width = 4096;
+overheadLight.shadow.mapSize.height = 4096;
+overheadLight.shadow.camera.left = -15;
+overheadLight.shadow.camera.right = 15;
+overheadLight.shadow.camera.top = 15;
+overheadLight.shadow.camera.bottom = -15;
+overheadLight.shadow.camera.near = 0.5;
+overheadLight.shadow.camera.far = 150;
+overheadLight.shadow.bias = -0.0001;
+
 scene.add(overheadLight);
 
 // --- 3. Post-Processing (The Noise Filter) ---
@@ -50,7 +62,8 @@ const renderPass = new RenderPass(scene, camera);
 composer.addPass(renderPass);
 
 const noisePass = new ShaderPass(NoiseShader);
-noisePass.uniforms["amount"].value = 0.15; 
+noisePass.uniforms["noiseAmount"].value = 0.15;
+noisePass.uniforms["grayscale"].value = 1.0;
 composer.addPass(noisePass);
 
 // --- 4. Helpers ---
@@ -59,7 +72,13 @@ const exporter = new Exporter(camera, renderer, scene);
 
 // --- 5. UI Logic ---
 
-const noiseToggle = document.getElementById('toggle-noise');
+const grayscaleToggle = document.getElementById('toggle-grayscale');
+const noiseSlider = document.getElementById('noise-amount');
+const noiseValue = document.getElementById('noise-amount-value');
+const ambientSlider = document.getElementById('ambient-intensity');
+const ambientValue = document.getElementById('ambient-intensity-value');
+const directionalSlider = document.getElementById('directional-intensity');
+const directionalValue = document.getElementById('directional-intensity-value');
 const regenBtn = document.getElementById('regen-btn');
 
 const cameraHeightSlider = document.getElementById('camera-height');
@@ -144,8 +163,26 @@ document.getElementById('res-640x480').addEventListener('click', () => setResolu
 
 downloadBatchBtn.addEventListener('click', downloadBatch);
 
-noiseToggle.addEventListener('change', (e) => {
-    noisePass.enabled = e.target.checked;
+grayscaleToggle.addEventListener('change', (e) => {
+    noisePass.uniforms["grayscale"].value = e.target.checked ? 1.0 : 0.0;
+});
+
+noiseSlider.addEventListener('input', (e) => {
+    const value = parseFloat(e.target.value);
+    noisePass.uniforms["noiseAmount"].value = value;
+    noiseValue.textContent = value.toFixed(2);
+});
+
+ambientSlider.addEventListener('input', (e) => {
+    const value = parseFloat(e.target.value);
+    ambientLight.intensity = value;
+    ambientValue.textContent = value.toFixed(2);
+});
+
+directionalSlider.addEventListener('input', (e) => {
+    const value = parseFloat(e.target.value);
+    overheadLight.intensity = value;
+    directionalValue.textContent = value.toFixed(2);
 });
 
 regenBtn.addEventListener('click', () => {
@@ -289,9 +326,7 @@ function animate() {
     requestAnimationFrame(animate);
     
     // Update shader time for animated noise effect
-    if (noisePass.enabled) {
-        noisePass.uniforms["time"].value += 0.01;
-    }
+    noisePass.uniforms["time"].value += 0.01;
     
     composer.render();
 }

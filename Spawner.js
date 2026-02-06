@@ -23,18 +23,48 @@ export class Spawner {
             const fieldGLTF = await this.loader.loadAsync(fieldUrl);
             const model = fieldGLTF.scene;
             let fieldMesh = null;
+
             model.traverse(c => {
                 if(c.isMesh) {
+                    // Enable shadows
                     c.receiveShadow = true;
-                    c.material.roughness = 1.0;
-                    c.material.metalness = 0.0;
+                    c.castShadow = true;
+
+                    // Preserve GLTF material properties if they exist
+                    if (c.material) {
+                        // If material already has PBR properties, keep them
+                        // Otherwise set default matte values
+                        if (c.material.roughness === undefined) {
+                            c.material.roughness = 1.0;
+                        }
+                        if (c.material.metalness === undefined) {
+                            c.material.metalness = 0.0;
+                        }
+
+                        // Ensure material responds to lights properly
+                        c.material.needsUpdate = true;
+                    }
+
                     fieldMesh = c;
                 }
             });
+
             this.gameFieldMesh = fieldMesh;
             this.scene.add(model);
         } catch (error) {
-            // ... fallback logic
+            console.warn('Failed to load field GLTF:', error);
+            // Fallback: create a simple plane if GLTF fails
+            const planeGeometry = new THREE.PlaneGeometry(20, 20);
+            const planeMaterial = new THREE.MeshStandardMaterial({
+                color: 0x808080,
+                roughness: 1.0,
+                metalness: 0.0
+            });
+            const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+            plane.rotation.x = -Math.PI / 2;
+            plane.receiveShadow = true;
+            this.gameFieldMesh = plane;
+            this.scene.add(plane);
         }
 
         // Generate Constant Matte Yellow Spheres
