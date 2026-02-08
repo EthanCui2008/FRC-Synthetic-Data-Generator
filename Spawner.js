@@ -14,11 +14,12 @@ export class Spawner {
     }
 
     /**
-     * Loads the field GLTF, but generates Spheres programmatically.
+     * Loads the field GLTF and piece GLTF models
      * @param {string} fieldUrl - Path to the game field GLTF
-     * @param {Object} pieceConfig - Configuration for sphere generation
+     * @param {string} pieceUrl - Path to the piece GLTF
      */
-    async loadAssets(fieldUrl, pieceConfig = { count: 1, radius: 0.1 }) {
+    async loadAssets(fieldUrl, pieceUrl) {
+        // Load the field
         try {
             const fieldGLTF = await this.loader.loadAsync(fieldUrl);
             const model = fieldGLTF.scene;
@@ -67,20 +68,58 @@ export class Spawner {
             this.scene.add(plane);
         }
 
-        // Generate Constant Matte Yellow Spheres
-        for (let i = 0; i < pieceConfig.count; i++) {
-            const geometry = new THREE.SphereGeometry(pieceConfig.radius, 32, 32);
-            geometry.translate(0, pieceConfig.radius, 0);
+        // Load the piece GLB
+        try {
+            const pieceGLTF = await this.loader.loadAsync(pieceUrl);
+            const pieceModel = pieceGLTF.scene;
 
+            // Enable shadows and preserve materials for all meshes in the piece
+            pieceModel.traverse(c => {
+                if(c.isMesh) {
+                    c.castShadow = true;
+                    c.receiveShadow = true;
+
+                    // Preserve GLTF material properties if they exist
+                    if (c.material) {
+                        if (c.material.roughness === undefined) {
+                            c.material.roughness = 1.0;
+                        }
+                        if (c.material.metalness === undefined) {
+                            c.material.metalness = 0.0;
+                        }
+                        c.material.needsUpdate = true;
+                    }
+                }
+            });
+
+            // Calculate bounding box to determine size
+            const bbox = new THREE.Box3().setFromObject(pieceModel);
+            const size = new THREE.Vector3();
+            bbox.getSize(size);
+
+            // Store the base radius as the maximum dimension / 2 (for collision detection)
+            this.pieceBaseRadius = Math.max(size.x, size.z) / 2;
+
+            // Store the template
+            this.pieces.push(pieceModel);
+
+            console.log('Piece GLB loaded successfully. Base radius:', this.pieceBaseRadius);
+        } catch (error) {
+            console.error('Failed to load piece GLTF:', error);
+            console.warn('Creating fallback sphere');
+
+            // Fallback to sphere if piece GLB fails to load
+            const geometry = new THREE.SphereGeometry(0.05, 32, 32);
+            geometry.translate(0, 0.05, 0);
             const material = new THREE.MeshStandardMaterial({
                 color: 0xffff00,
                 roughness: 1.0,
                 metalness: 0.0
             });
-
             const sphere = new THREE.Mesh(geometry, material);
             sphere.castShadow = true;
             this.pieces.push(sphere);
+            this.pieceBaseRadius = 0.05;
         }
     }
 
@@ -102,21 +141,30 @@ export class Spawner {
     }
 
     /**
-     * Get the effective radius of a ball (accounting for scale)
+     * Get the effective radius of an object (accounting for scale)
+     * Works with both sphere geometry and GLB models
      */
-    getBallRadius(ball) {
-        const baseRadius = ball.geometry.parameters.radius;
-        return baseRadius * ball.scale.x;
+    getObjectRadius(object) {
+        // For GLB models, use the stored base radius
+        if (this.pieceBaseRadius !== undefined) {
+            return this.pieceBaseRadius * object.scale.x;
+        }
+
+        // Fallback: calculate from bounding box
+        const bbox = new THREE.Box3().setFromObject(object);
+        const size = new THREE.Vector3();
+        bbox.getSize(size);
+        return Math.max(size.x, size.z) / 2;
     }
 
     /**
-     * Check if a position would cause collision with existing balls
+     * Check if a position would cause collision with existing objects
      */
-    wouldCollide(x, z, radius, existingBalls) {
-        for (const ball of existingBalls) {
-            const otherRadius = this.getBallRadius(ball);
-            const dx = x - ball.position.x;
-            const dz = z - ball.position.z;
+    wouldCollide(x, z, radius, existingObjects) {
+        for (const obj of existingObjects) {
+            const otherRadius = this.getObjectRadius(obj);
+            const dx = x - obj.position.x;
+            const dz = z - obj.position.z;
             const distance = Math.sqrt(dx * dx + dz * dz);
             const minDistance = radius + otherRadius;
             if (distance < minDistance) {
@@ -127,20 +175,23 @@ export class Spawner {
     }
 
     /**
-     * Spawn spheres randomly on a given y plane, preventing ball-to-ball clipping
+     * Spawn GLB models randomly on a given y plane, preventing object-to-object clipping
      */
-    spawnOnPlane(count, minX, maxX, minZ, maxZ, y) {
+    spawnOnPlane(count, minX, maxX, minZ, maxZ, y, objectSize = 0.05) {
         this.spawnedInstances.forEach(p => this.scene.remove(p));
         this.spawnedInstances = [];
 
-        const maxAttempts = 100; // Max attempts per ball to find non-colliding position
+        const maxAttempts = 100; // Max attempts per object to find non-colliding position
 
         for (let i = 0; i < count; i++) {
             const template = this.pieces[Math.floor(Math.random() * this.pieces.length)];
-            const clone = template.clone();
-            clone.scale.set(2.0, 2.0, 2.0);
+            const clone = template.clone(true); // Deep clone to include all children
 
-            const effectiveRadius = this.getBallRadius(clone);
+            // Calculate scale based on desired objectSize and base radius
+            const scale = objectSize / this.pieceBaseRadius;
+            clone.scale.set(scale, scale, scale);
+
+            const effectiveRadius = this.getObjectRadius(clone);
             let placed = false;
 
             for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -149,16 +200,29 @@ export class Spawner {
 
                 if (!this.wouldCollide(x, z, effectiveRadius, this.spawnedInstances)) {
                     clone.position.set(x, y, z);
+
+                    // Random rotation around Y axis for variety
+                    clone.rotation.y = Math.random() * Math.PI * 2;
+
                     placed = true;
                     break;
                 }
             }
 
             // If we couldn't find a non-colliding position after max attempts,
-            // skip this ball to avoid infinite loops with too many balls
+            // skip this object to avoid infinite loops with too many objects
             if (!placed) {
-                clone.geometry.dispose();
-                clone.material.dispose();
+                // Clean up the clone
+                clone.traverse(c => {
+                    if (c.geometry) c.geometry.dispose();
+                    if (c.material) {
+                        if (Array.isArray(c.material)) {
+                            c.material.forEach(m => m.dispose());
+                        } else {
+                            c.material.dispose();
+                        }
+                    }
+                });
                 continue;
             }
 
@@ -168,16 +232,16 @@ export class Spawner {
     }
 
     /**
-     * Snap object to field floor using raycast
+     * Snap object to field floor using raycast (works with GLB models)
      */
-    snapToFloor(object, bounds) {
+    snapToFloor(object) {
         if (!this.gameFieldMesh) return;
+
         this.raycaster.set(object.position, this.downVector);
         const intersects = this.raycaster.intersectObject(this.gameFieldMesh, true);
+
         if (intersects.length > 0) {
-            object.position.y = intersects[0].point.y + object.geometry.parameters.radius * object.scale.y;
-        } else if (bounds) {
-            object.position.y = bounds.min.y + object.geometry.parameters.radius * object.scale.y;
+            object.position.y = intersects[0].point.y;
         } else {
             object.position.y = 0;
         }
@@ -192,18 +256,5 @@ export class Spawner {
         const objBox = new THREE.Box3().setFromObject(object);
         const fieldBox = new THREE.Box3().setFromObject(this.gameFieldMesh);
         return !fieldBox.containsBox(objBox);
-    }
-
-    snapToFloor(object) {
-        if (!this.gameFieldMesh) return;
-
-        this.raycaster.set(object.position, this.downVector);
-        const intersects = this.raycaster.intersectObject(this.gameFieldMesh, true);
-
-        if (intersects.length > 0) {
-            object.position.y = intersects[0].point.y;
-        } else {
-            object.position.y = 0; 
-        }
     }
 }

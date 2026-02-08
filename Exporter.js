@@ -16,41 +16,36 @@ export class Exporter {
     }
 
     /**
-     * Get the sphere's world center position (accounting for geometry offset)
+     * Get the object's world center position
      */
-    getSphereWorldCenter(sphereMesh) {
-        const geometry = sphereMesh.geometry;
-        const baseRadius = geometry.parameters.radius;
-        const scale = sphereMesh.scale.x;
-
+    getObjectWorldCenter(object) {
+        const bbox = new THREE.Box3().setFromObject(object);
         const center = new THREE.Vector3();
-        center.copy(sphereMesh.position);
-        center.y += baseRadius * scale; // Account for geometry translate
-
+        bbox.getCenter(center);
         return center;
     }
 
     /**
-     * Get the sphere's world radius (accounting for scale)
+     * Get the object's effective radius (maximum dimension / 2)
      */
-    getSphereWorldRadius(sphereMesh) {
-        const geometry = sphereMesh.geometry;
-        const baseRadius = geometry.parameters.radius;
-        const scale = sphereMesh.scale.x;
-        return baseRadius * scale;
+    getObjectWorldRadius(object) {
+        const bbox = new THREE.Box3().setFromObject(object);
+        const size = new THREE.Vector3();
+        bbox.getSize(size);
+        return Math.max(size.x, size.y, size.z) / 2;
     }
 
     /**
-     * Check if a sphere is fully occluded by other objects in the scene.
-     * Uses a single ray from camera to sphere center.
-     * Returns true if the sphere is fully occluded (should NOT be labeled).
+     * Check if an object is fully occluded by other objects in the scene.
+     * Uses a single ray from camera to object center.
+     * Returns true if the object is fully occluded (should NOT be labeled).
      */
-    isFullyOccluded(sphereMesh) {
-        const center = this.getSphereWorldCenter(sphereMesh);
-        const worldRadius = this.getSphereWorldRadius(sphereMesh);
+    isFullyOccluded(object) {
+        const center = this.getObjectWorldCenter(object);
+        const worldRadius = this.getObjectWorldRadius(object);
         const cameraPos = this.camera.position.clone();
 
-        // Vector from camera to sphere center
+        // Vector from camera to object center
         const toCenter = center.clone().sub(cameraPos);
         const distanceToCenter = toCenter.length();
 
@@ -59,21 +54,28 @@ export class Exporter {
             return false;
         }
 
-        // Cast ray from camera toward sphere center
+        // Cast ray from camera toward object center
         const rayDir = toCenter.clone().normalize();
         this._raycaster.set(cameraPos, rayDir);
         this._raycaster.far = distanceToCenter + worldRadius;
 
-        // Get all intersections except with the target sphere
+        // Get all intersections
         const intersects = this._raycaster.intersectObjects(this.scene.children, true);
 
         for (const hit of intersects) {
-            // Skip if we hit the sphere itself
-            if (hit.object === sphereMesh) {
+            // Skip if we hit the object itself or any of its children
+            let isPartOfTarget = false;
+            object.traverse(child => {
+                if (child === hit.object) {
+                    isPartOfTarget = true;
+                }
+            });
+
+            if (isPartOfTarget) {
                 continue;
             }
 
-            // If something is hit before reaching the sphere's front surface, it's occluded
+            // If something is hit before reaching the object's front surface, it's occluded
             if (hit.distance < distanceToCenter - worldRadius) {
                 return true;
             }
@@ -83,8 +85,90 @@ export class Exporter {
     }
 
     /**
-     * Get the exact screen-space bounding box for a sphere mesh by sampling
+     * Get the screen-space bounding box for any object by sampling
+     * points from its bounding box corners and projecting them.
+     */
+    getObjectBoundingBox(object) {
+        // Ensure matrices are current
+        object.updateMatrixWorld(true);
+        this.camera.updateMatrixWorld(true);
+        this.camera.updateProjectionMatrix();
+
+        // Get object's world bounding box
+        const bbox = new THREE.Box3().setFromObject(object);
+
+        // Get the 8 corners of the bounding box
+        const corners = [
+            new THREE.Vector3(bbox.min.x, bbox.min.y, bbox.min.z),
+            new THREE.Vector3(bbox.min.x, bbox.min.y, bbox.max.z),
+            new THREE.Vector3(bbox.min.x, bbox.max.y, bbox.min.z),
+            new THREE.Vector3(bbox.min.x, bbox.max.y, bbox.max.z),
+            new THREE.Vector3(bbox.max.x, bbox.min.y, bbox.min.z),
+            new THREE.Vector3(bbox.max.x, bbox.min.y, bbox.max.z),
+            new THREE.Vector3(bbox.max.x, bbox.max.y, bbox.min.z),
+            new THREE.Vector3(bbox.max.x, bbox.max.y, bbox.max.z),
+        ];
+
+        // Project all corners to screen space
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        let hasValidPoint = false;
+
+        const cameraDir = new THREE.Vector3();
+        this.camera.getWorldDirection(cameraDir);
+        const cameraPos = this.camera.position.clone();
+
+        for (const corner of corners) {
+            // Check if point is in front of camera
+            const toPoint = corner.clone().sub(cameraPos);
+            const dotProduct = toPoint.dot(cameraDir);
+
+            if (dotProduct < this.camera.near) {
+                continue; // Skip points behind camera
+            }
+
+            // Project to NDC
+            const projected = corner.clone().project(this.camera);
+
+            // Convert from NDC (-1 to 1) to normalized screen coordinates (0 to 1)
+            const screenX = (projected.x + 1) / 2;
+            const screenY = (1 - projected.y) / 2;
+
+            // Track min/max
+            minX = Math.min(minX, screenX);
+            maxX = Math.max(maxX, screenX);
+            minY = Math.min(minY, screenY);
+            maxY = Math.max(maxY, screenY);
+            hasValidPoint = true;
+        }
+
+        if (!hasValidPoint) {
+            return null; // Object not visible
+        }
+
+        // Clamp to [0, 1] range
+        minX = Math.max(0, Math.min(1, minX));
+        maxX = Math.max(0, Math.min(1, maxX));
+        minY = Math.max(0, Math.min(1, minY));
+        maxY = Math.max(0, Math.min(1, maxY));
+
+        const width = maxX - minX;
+        const height = maxY - minY;
+
+        // Skip if box is too small or invalid
+        if (width <= 0 || height <= 0) {
+            return null;
+        }
+
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+
+        return { centerX, centerY, width, height };
+    }
+
+    /**
+     * LEGACY: Get the exact screen-space bounding box for a sphere mesh by sampling
      * points on the sphere's silhouette edge as seen from the camera.
+     * Kept for reference but replaced by getObjectBoundingBox.
      */
     getSphereBoundingBox(sphereMesh) {
         // Ensure matrices are current
@@ -233,19 +317,16 @@ export class Exporter {
             return null;
         }
 
-        const bbox = this.getSphereBoundingBox(obj);
+        const bbox = this.getObjectBoundingBox(obj);
 
         if (!bbox) {
             return null;
         }
 
-        const x_center = (bbox.minX + bbox.maxX) / 2;
-        const y_center = (bbox.minY + bbox.maxY) / 2;
-
         return {
             class_id: 0,
-            x_center,
-            y_center,
+            x_center: bbox.centerX,
+            y_center: bbox.centerY,
             width: bbox.width,
             height: bbox.height
         };

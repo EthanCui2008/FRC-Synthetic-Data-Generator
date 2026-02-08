@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 
 import { Spawner } from './Spawner.js';
 import { Exporter } from './Exporter.js';
@@ -10,7 +11,7 @@ import { NoiseShader } from './NoiseShader.js';
 // --- 1. Scene & Camera Setup ---
 let fieldBounds = null;
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x222222); // Darker background to see model better
+// Background will be set to equirectangular skybox in init()
 
 
 // Camera: 55° vertical FOV, 1920x1200 aspect (80° horizontal)
@@ -23,38 +24,68 @@ const camera = new THREE.PerspectiveCamera(CAMERA_FOV, CAMERA_ASPECT, 0.1, 1000)
 camera.position.set(0, 30, 30);
 
 
-const renderer = new THREE.WebGLRenderer({ 
-    antialias: true, 
-    preserveDrawingBuffer: true 
+const renderer = new THREE.WebGLRenderer({
+    antialias: true,
+    preserveDrawingBuffer: true
 });
 renderer.setSize(CAMERA_WIDTH, CAMERA_HEIGHT);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.BasicShadowMap; // Sharp shadows, computationally cheaper
+
+// Color space and tone mapping for proper emissive rendering
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
 const canvasWrapper = document.getElementById('canvas-wrapper');
 canvasWrapper.appendChild(renderer.domElement);
 
-// --- 2. Lighting (Optimized for Contrast and Shadows) ---
-// Low ambient light to preserve shadow contrast
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.25);
-scene.add(ambientLight);
+// --- 2. Lighting (4 directional lights in a square pattern) ---
+// Hemisphere light for natural ambient lighting
+const hemisphereLight = new THREE.HemisphereLight(
+    0xffffff, // Sky color (top)
+    0x444444, // Ground color (bottom)
+    0.5       // Intensity
+);
+scene.add(hemisphereLight);
 
-// Strong directional light placed directly above (0, 100, 0) pointing straight down
-const overheadLight = new THREE.DirectionalLight(0xffffff, 2.5);
-overheadLight.position.set(0, 100, 0);
-overheadLight.castShadow = true;
+// 4 directional lights placed 20 units above, in a square 10 units apart
+// Light positions: (-5, 20, -5), (5, 20, -5), (-5, 20, 5), (5, 20, 5)
+const LIGHT_HEIGHT = 20;
+const LIGHT_SPREAD = 5; // Half of 10 units apart
+const LIGHT_INTENSITY = 0.8; // Reduced intensity divided among 4 lights
 
-// Shadow configuration for sharp, high-quality shadows
-overheadLight.shadow.mapSize.width = 4096;
-overheadLight.shadow.mapSize.height = 4096;
-overheadLight.shadow.camera.left = -15;
-overheadLight.shadow.camera.right = 15;
-overheadLight.shadow.camera.top = 15;
-overheadLight.shadow.camera.bottom = -15;
-overheadLight.shadow.camera.near = 0.5;
-overheadLight.shadow.camera.far = 150;
-overheadLight.shadow.bias = -0.0001;
+const overheadLights = [];
 
-scene.add(overheadLight);
+function createDirectionalLight(x, z) {
+    const light = new THREE.DirectionalLight(0xffffff, LIGHT_INTENSITY);
+    light.position.set(x, LIGHT_HEIGHT, z);
+    light.castShadow = true;
+
+    // Shadow configuration for sharp, high-quality shadows (4x resolution: 2048 -> 8192)
+    light.shadow.mapSize.width = 8192;
+    light.shadow.mapSize.height = 8192;
+    light.shadow.camera.left = -15;
+    light.shadow.camera.right = 15;
+    light.shadow.camera.top = 15;
+    light.shadow.camera.bottom = -15;
+    light.shadow.camera.near = 0.5;
+    light.shadow.camera.far = 50;
+    light.shadow.bias = -0.0001;
+
+    // Point straight down (target directly below light position)
+    light.target.position.set(x, 0, z);
+
+    scene.add(light);
+    scene.add(light.target);
+
+    return light;
+}
+
+// Create 4 lights in square pattern
+overheadLights.push(createDirectionalLight(-LIGHT_SPREAD, -LIGHT_SPREAD)); // Front-left
+overheadLights.push(createDirectionalLight(LIGHT_SPREAD, -LIGHT_SPREAD));  // Front-right
+overheadLights.push(createDirectionalLight(-LIGHT_SPREAD, LIGHT_SPREAD));  // Back-left
+overheadLights.push(createDirectionalLight(LIGHT_SPREAD, LIGHT_SPREAD));   // Back-right
 
 // --- 3. Post-Processing (The Noise Filter) ---
 const composer = new EffectComposer(renderer);
@@ -75,10 +106,6 @@ const exporter = new Exporter(camera, renderer, scene);
 const grayscaleToggle = document.getElementById('toggle-grayscale');
 const noiseSlider = document.getElementById('noise-amount');
 const noiseValue = document.getElementById('noise-amount-value');
-const ambientSlider = document.getElementById('ambient-intensity');
-const ambientValue = document.getElementById('ambient-intensity-value');
-const directionalSlider = document.getElementById('directional-intensity');
-const directionalValue = document.getElementById('directional-intensity-value');
 const regenBtn = document.getElementById('regen-btn');
 
 const cameraHeightSlider = document.getElementById('camera-height');
@@ -89,6 +116,10 @@ const cameraMinZInput = document.getElementById('camera-min-z');
 const cameraMaxZInput = document.getElementById('camera-max-z');
 const spawnCountSlider = document.getElementById('spawn-count');
 const spawnCountValue = document.getElementById('spawn-count-value');
+const ballSizeSlider = document.getElementById('ball-size');
+const ballSizeValue = document.getElementById('ball-size-value');
+const pieceHeightSlider = document.getElementById('piece-height');
+const pieceHeightValue = document.getElementById('piece-height-value');
 const cameraXInfo = document.getElementById('camera-x');
 const cameraYInfo = document.getElementById('camera-y');
 const cameraZInfo = document.getElementById('camera-z');
@@ -107,6 +138,8 @@ const progressBar = document.getElementById('progress-bar');
 // Camera bounds and angle state
 let cameraMinX = -9, cameraMaxX = 9, cameraMinZ = -4, cameraMaxZ = 4;
 let spawnCount = 12;
+let ballSize = 0.05;
+let pieceHeight = 0; // Height trim for raising pieces
 
 // --- Camera UI Logic ---
 
@@ -173,16 +206,16 @@ noiseSlider.addEventListener('input', (e) => {
     noiseValue.textContent = value.toFixed(2);
 });
 
-ambientSlider.addEventListener('input', (e) => {
-    const value = parseFloat(e.target.value);
-    ambientLight.intensity = value;
-    ambientValue.textContent = value.toFixed(2);
+ballSizeSlider.addEventListener('input', (e) => {
+    ballSize = parseFloat(e.target.value);
+    ballSizeValue.textContent = ballSize.toFixed(3);
+    randomizeScene();
 });
 
-directionalSlider.addEventListener('input', (e) => {
-    const value = parseFloat(e.target.value);
-    overheadLight.intensity = value;
-    directionalValue.textContent = value.toFixed(2);
+pieceHeightSlider.addEventListener('input', (e) => {
+    pieceHeight = parseFloat(e.target.value);
+    pieceHeightValue.textContent = pieceHeight.toFixed(2);
+    randomizeScene();
 });
 
 regenBtn.addEventListener('click', () => {
@@ -255,8 +288,8 @@ async function downloadBatch() {
 function randomizeScene() {
     if (!fieldBounds) return;
 
-    // --- Spawn N spheres randomly on y=0 plane, allow clipping ---
-    spawner.spawnOnPlane(spawnCount, cameraMinX, cameraMaxX, cameraMinZ, cameraMaxZ, 0);
+    // --- Spawn N pieces randomly on plane with dynamic size and height trim ---
+    spawner.spawnOnPlane(spawnCount, cameraMinX, cameraMaxX, cameraMinZ, cameraMaxZ, pieceHeight, ballSize);
 
     // --- Camera: random position, yaw and pitch controlled by sliders ---
     const minX = (cameraMinX !== null) ? cameraMinX : -10;
@@ -300,7 +333,7 @@ function randomizeScene() {
     );
     camera.lookAt(camera.position.clone().add(lookDir));
     camera.updateMatrixWorld();
-    
+
     // Display camera info
     cameraXInfo.textContent = x.toFixed(2);
     cameraYInfo.textContent = y.toFixed(2);
@@ -310,11 +343,32 @@ function randomizeScene() {
 }
 
 async function init() {
-    // 20-fold reduction: if original was 1.0, new radius is 0.05
-    await spawner.loadAssets('assets/field.glb', { 
-        count: 1,      // We only need one type since they are all yellow
-        radius: 0.05   // Reduced 20-fold from a standard 1.0 unit
-    });
+    // Load HDR environment map for lighting
+    const rgbeLoader = new RGBELoader();
+    try {
+        const hdrTexture = await rgbeLoader.loadAsync('assets/field.hdr');
+        hdrTexture.mapping = THREE.EquirectangularReflectionMapping;
+        scene.environment = hdrTexture;
+        console.log('HDR environment loaded successfully');
+    } catch (error) {
+        console.warn('Failed to load HDR environment:', error);
+    }
+
+    // Load background.jpg as equirectangular skybox
+    const textureLoader = new THREE.TextureLoader();
+    try {
+        const backgroundTexture = await textureLoader.loadAsync('assets/background.jpg');
+        backgroundTexture.mapping = THREE.EquirectangularReflectionMapping;
+        backgroundTexture.colorSpace = THREE.SRGBColorSpace;
+        scene.background = backgroundTexture;
+        console.log('Background skybox loaded successfully');
+    } catch (error) {
+        console.warn('Failed to load background skybox:', error);
+        scene.background = new THREE.Color(0xffffff); // Fallback to white
+    }
+
+    // Load field and piece GLB models
+    await spawner.loadAssets('assets/field.glb', 'assets/piece.glb');
 
     // Get field bounds from spawner
     fieldBounds = spawner.getFieldBounds();
