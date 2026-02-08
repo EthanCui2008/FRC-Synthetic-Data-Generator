@@ -5,66 +5,73 @@ export class Spawner {
     constructor(scene) {
         this.scene = scene;
         this.loader = new GLTFLoader();
-        this.raycaster = new THREE.Raycaster();
-        this.downVector = new THREE.Vector3(0, -1, 0);
-        
-        this.gameFieldMesh = null;
-        this.pieces = []; 
+
+        this.fieldModel = null;
+        this.fieldMeshes = [];
+        this.obstacleMeshes = [];
+        this.floorMesh = null;
+        this.pieces = [];
         this.spawnedInstances = [];
+        this.pieceBaseRadius = 0.1;
+        this.pieceHeight = 0.1;
     }
 
-    /**
-     * Loads the field GLTF and piece GLTF models
-     * @param {string} fieldUrl - Path to the game field GLTF
-     * @param {string} pieceUrl - Path to the piece GLTF
-     */
     async loadAssets(fieldUrl, pieceUrl) {
         // Load the field
         try {
             const fieldGLTF = await this.loader.loadAsync(fieldUrl);
-            const model = fieldGLTF.scene;
-            let fieldMesh = null;
+            this.fieldModel = fieldGLTF.scene;
 
-            model.traverse(c => {
-                if(c.isMesh) {
-                    // Enable shadows
+            this.fieldModel.traverse(c => {
+                if (c.isMesh) {
                     c.receiveShadow = true;
                     c.castShadow = true;
 
-                    // Preserve GLTF material properties if they exist
                     if (c.material) {
-                        // If material already has PBR properties, keep them
-                        // Otherwise set default matte values
-                        if (c.material.roughness === undefined) {
-                            c.material.roughness = 1.0;
-                        }
-                        if (c.material.metalness === undefined) {
-                            c.material.metalness = 0.0;
-                        }
-
-                        // Ensure material responds to lights properly
+                        if (c.material.roughness === undefined) c.material.roughness = 1.0;
+                        if (c.material.metalness === undefined) c.material.metalness = 0.0;
                         c.material.needsUpdate = true;
                     }
 
-                    fieldMesh = c;
+                    this.fieldMeshes.push(c);
+
+                    const name = (c.name || '').toLowerCase();
+                    if (name.includes('carpet') || name.includes('floor') || name.includes('ground')) {
+                        this.floorMesh = c;
+                    } else {
+                        this.obstacleMeshes.push(c);
+                    }
                 }
             });
 
-            this.gameFieldMesh = fieldMesh;
-            this.scene.add(model);
+            // If no floor identified by name, use largest horizontal mesh
+            if (!this.floorMesh && this.fieldMeshes.length > 0) {
+                let largestArea = 0;
+                for (const mesh of this.fieldMeshes) {
+                    const bbox = new THREE.Box3().setFromObject(mesh);
+                    const size = new THREE.Vector3();
+                    bbox.getSize(size);
+                    const area = size.x * size.z;
+                    if (area > largestArea) {
+                        largestArea = area;
+                        this.floorMesh = mesh;
+                    }
+                }
+                this.obstacleMeshes = this.obstacleMeshes.filter(m => m !== this.floorMesh);
+            }
+
+            this.scene.add(this.fieldModel);
+            console.log(`Field loaded: ${this.fieldMeshes.length} meshes, ${this.obstacleMeshes.length} obstacles`);
         } catch (error) {
             console.warn('Failed to load field GLTF:', error);
-            // Fallback: create a simple plane if GLTF fails
-            const planeGeometry = new THREE.PlaneGeometry(20, 20);
-            const planeMaterial = new THREE.MeshStandardMaterial({
-                color: 0x808080,
-                roughness: 1.0,
-                metalness: 0.0
-            });
-            const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+            const plane = new THREE.Mesh(
+                new THREE.PlaneGeometry(20, 20),
+                new THREE.MeshStandardMaterial({ color: 0x808080, roughness: 1.0, metalness: 0.0 })
+            );
             plane.rotation.x = -Math.PI / 2;
             plane.receiveShadow = true;
-            this.gameFieldMesh = plane;
+            this.floorMesh = plane;
+            this.fieldMeshes.push(plane);
             this.scene.add(plane);
         }
 
@@ -73,123 +80,94 @@ export class Spawner {
             const pieceGLTF = await this.loader.loadAsync(pieceUrl);
             const pieceModel = pieceGLTF.scene;
 
-            // Enable shadows and preserve materials for all meshes in the piece
             pieceModel.traverse(c => {
-                if(c.isMesh) {
+                if (c.isMesh) {
                     c.castShadow = true;
                     c.receiveShadow = true;
-
-                    // Preserve GLTF material properties if they exist
                     if (c.material) {
-                        if (c.material.roughness === undefined) {
-                            c.material.roughness = 1.0;
-                        }
-                        if (c.material.metalness === undefined) {
-                            c.material.metalness = 0.0;
-                        }
+                        if (c.material.roughness === undefined) c.material.roughness = 1.0;
+                        if (c.material.metalness === undefined) c.material.metalness = 0.0;
                         c.material.needsUpdate = true;
                     }
                 }
             });
 
-            // Calculate bounding box to determine size
             const bbox = new THREE.Box3().setFromObject(pieceModel);
             const size = new THREE.Vector3();
             bbox.getSize(size);
-
-            // Store the base radius as the maximum dimension / 2 (for collision detection)
             this.pieceBaseRadius = Math.max(size.x, size.z) / 2;
-
-            // Store the template
+            this.pieceHeight = size.y;
             this.pieces.push(pieceModel);
 
-            console.log('Piece GLB loaded successfully. Base radius:', this.pieceBaseRadius);
+            console.log('Piece loaded. Radius:', this.pieceBaseRadius, 'Height:', this.pieceHeight);
         } catch (error) {
             console.error('Failed to load piece GLTF:', error);
-            console.warn('Creating fallback sphere');
-
-            // Fallback to sphere if piece GLB fails to load
+            // Fallback sphere
             const geometry = new THREE.SphereGeometry(0.05, 32, 32);
             geometry.translate(0, 0.05, 0);
-            const material = new THREE.MeshStandardMaterial({
-                color: 0xffff00,
-                roughness: 1.0,
-                metalness: 0.0
-            });
+            const material = new THREE.MeshStandardMaterial({ color: 0xffff00, roughness: 1.0, metalness: 0.0 });
             const sphere = new THREE.Mesh(geometry, material);
             sphere.castShadow = true;
             this.pieces.push(sphere);
             this.pieceBaseRadius = 0.05;
+            this.pieceHeight = 0.1;
         }
     }
 
-    /**
-     * Returns the bounding box of the field mesh
-     */
     getFieldBounds() {
-        if (!this.gameFieldMesh) return null;
-        return new THREE.Box3().setFromObject(this.gameFieldMesh);
+        if (!this.floorMesh) return null;
+        return new THREE.Box3().setFromObject(this.floorMesh);
     }
 
-    /**
-     * Scatter spheres only within the field bounds
-     */
-    scatterWithinBounds(count, bounds) {
-        // (Unused in new logic, but kept for compatibility)
-        this.spawnedInstances.forEach(p => this.scene.remove(p));
-        this.spawnedInstances = [];
-    }
-
-    /**
-     * Get the effective radius of an object (accounting for scale)
-     * Works with both sphere geometry and GLB models
-     */
     getObjectRadius(object) {
-        // For GLB models, use the stored base radius
-        if (this.pieceBaseRadius !== undefined) {
-            return this.pieceBaseRadius * object.scale.x;
-        }
-
-        // Fallback: calculate from bounding box
-        const bbox = new THREE.Box3().setFromObject(object);
-        const size = new THREE.Vector3();
-        bbox.getSize(size);
-        return Math.max(size.x, size.z) / 2;
+        return this.pieceBaseRadius * object.scale.x;
     }
 
-    /**
-     * Check if a position would cause collision with existing objects
-     */
-    wouldCollide(x, z, radius, existingObjects) {
+    wouldCollideWithPieces(x, z, radius, existingObjects) {
         for (const obj of existingObjects) {
             const otherRadius = this.getObjectRadius(obj);
             const dx = x - obj.position.x;
             const dz = z - obj.position.z;
             const distance = Math.sqrt(dx * dx + dz * dz);
-            const minDistance = radius + otherRadius;
-            if (distance < minDistance) {
+            if (distance < radius + otherRadius) {
                 return true;
             }
         }
         return false;
     }
 
-    /**
-     * Spawn GLB models randomly on a given y plane, preventing object-to-object clipping
-     */
-    spawnOnPlane(count, minX, maxX, minZ, maxZ, y, objectSize = 0.05) {
+    wouldClipIntoObstacle(x, y, z, radius) {
+        const pieceSphere = new THREE.Sphere(
+            new THREE.Vector3(x, y + this.pieceHeight / 2, z),
+            radius
+        );
+
+        for (const obstacle of this.obstacleMeshes) {
+            const obstacleBox = new THREE.Box3().setFromObject(obstacle);
+            if (obstacleBox.intersectsSphere(pieceSphere)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    spawnOnPlane(count, minX, maxX, minZ, maxZ, heightTrim = 0) {
+        // Clear existing
         this.spawnedInstances.forEach(p => this.scene.remove(p));
         this.spawnedInstances = [];
 
-        const maxAttempts = 100; // Max attempts per object to find non-colliding position
+        if (this.pieces.length === 0) {
+            console.warn('No pieces loaded, cannot spawn');
+            return;
+        }
+
+        const maxAttempts = 150;
+        const floorY = heightTrim;
 
         for (let i = 0; i < count; i++) {
             const template = this.pieces[Math.floor(Math.random() * this.pieces.length)];
-            const clone = template.clone(true); // Deep clone to include all children
-
-            // Calculate scale based on desired objectSize and base radius
-            const scale = objectSize / this.pieceBaseRadius;
-            clone.scale.set(scale, scale, scale);
+            const clone = template.clone(true);
+            clone.scale.set(1, 1, 1);
 
             const effectiveRadius = this.getObjectRadius(clone);
             let placed = false;
@@ -198,21 +176,21 @@ export class Spawner {
                 const x = THREE.MathUtils.lerp(minX, maxX, Math.random());
                 const z = THREE.MathUtils.lerp(minZ, maxZ, Math.random());
 
-                if (!this.wouldCollide(x, z, effectiveRadius, this.spawnedInstances)) {
-                    clone.position.set(x, y, z);
-
-                    // Random rotation around Y axis for variety
-                    clone.rotation.y = Math.random() * Math.PI * 2;
-
-                    placed = true;
-                    break;
+                if (this.wouldCollideWithPieces(x, z, effectiveRadius, this.spawnedInstances)) {
+                    continue;
                 }
+
+                if (this.wouldClipIntoObstacle(x, floorY, z, effectiveRadius)) {
+                    continue;
+                }
+
+                clone.position.set(x, floorY, z);
+                clone.rotation.y = Math.random() * Math.PI * 2;
+                placed = true;
+                break;
             }
 
-            // If we couldn't find a non-colliding position after max attempts,
-            // skip this object to avoid infinite loops with too many objects
             if (!placed) {
-                // Clean up the clone
                 clone.traverse(c => {
                     if (c.geometry) c.geometry.dispose();
                     if (c.material) {
@@ -229,32 +207,7 @@ export class Spawner {
             this.scene.add(clone);
             this.spawnedInstances.push(clone);
         }
-    }
 
-    /**
-     * Snap object to field floor using raycast (works with GLB models)
-     */
-    snapToFloor(object) {
-        if (!this.gameFieldMesh) return;
-
-        this.raycaster.set(object.position, this.downVector);
-        const intersects = this.raycaster.intersectObject(this.gameFieldMesh, true);
-
-        if (intersects.length > 0) {
-            object.position.y = intersects[0].point.y;
-        } else {
-            object.position.y = 0;
-        }
-    }
-
-    /**
-     * Check if object is clipping into the field mesh
-     */
-    isClipping(object) {
-        if (!this.gameFieldMesh) return false;
-        // Use bounding box intersection
-        const objBox = new THREE.Box3().setFromObject(object);
-        const fieldBox = new THREE.Box3().setFromObject(this.gameFieldMesh);
-        return !fieldBox.containsBox(objBox);
+        console.log(`Spawned ${this.spawnedInstances.length}/${count} pieces`);
     }
 }
